@@ -232,7 +232,7 @@ class resize(object):
                     target['boxes'][i][2] = target['boxes'][i][2]*scale_x
                     target['boxes'][i][3] = target['boxes'][i][3]*scale_y
 
-
+        img = T.functional.resize(img, (self.target_h, self.target_w))
         return img, target
 
 

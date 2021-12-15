@@ -44,6 +44,9 @@ def main(training=False):
     # device = torch.device('cpu')
 
 
+    train_data_path = "/NFS/share/Euclid/Dataset/ObjectDetection/BDD100K/bdd100k/images/100k/train/"
+    val_data_path   = "/NFS/share/Euclid/Dataset/ObjectDetection/BDD100K/bdd100k/images/100k/val/"
+
     transform_train = transforms.Compose([ConvertCocoPolysToMask(),
                                           transforms.ToTensor(),
                                           resize(480,640)])
@@ -54,21 +57,20 @@ def main(training=False):
 
     if training:
         # define training and validation data loaders
-        bdd100k_train    = CocoDetection("/home/hhwu/datasets/bdd100k/bdd100k/images/100k/train", "/home/hhwu/datasets/bdd100k/bdd100k/COCOFormat/classes_15/det_train_coco_gyr_dss.json", transforms=transform_train)
+        bdd100k_train    = CocoDetection(train_data_path, "./det_train_coco.json", transforms=transform_train)
+        bdd100k_val      = CocoDetection(val_data_path, "./det_val_coco.json", transforms=transform_train)
         #bdd100k_train    = CocoDetection("/home/hhwu/datasets/bdd100k/bdd100k/images/100k/train", "/home/hhwu/datasets/bdd100k/bdd100k/COCOFormat/classes_15/det_train_coco_gyr_dss.json", transforms=None)
         train_dataloader = DataLoader(bdd100k_train, batch_size=4, shuffle=False, num_workers=0, collate_fn=collate_fn)
-
-
-        bdd100k_val      = CocoDetection("/home/hhwu/datasets/bdd100k/bdd100k/images/100k/val", "/home/hhwu/datasets/bdd100k/bdd100k/COCOFormat/classes_15/det_val_coco_gyr_dss.json", transforms=transform_train)
         val_dataloader   = DataLoader(bdd100k_val, batch_size=1, shuffle=False, num_workers=0)
 
 
         # get the model using our helper function
-        model = get_model_instance_detection(num_classes)
+        # model = torch.nn.DataParallel(get_model_instance_detection(num_classes)).to(device)
+        model = get_model_instance_detection(num_classes).to(device)
 
 
         # move model to the right device
-        model.to(device)
+        # model.to(device)
 
         # construct an optimizer
         params = [p for p in model.parameters() if p.requires_grad]
