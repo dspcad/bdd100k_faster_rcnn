@@ -29,7 +29,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq):
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
         #targets = [{k: v for k, v in t.items()} for t in targets]
 
-        print(f"debug: img shape: {len(images)}   {images[0].shape}")
+        # print(f"debug: img shape: {len(images)}   {images[0].shape}")
 
         #for t in targets:
         #    print(f"debug:      {t}")

@@ -48,9 +48,9 @@ def main(training=False):
     val_data_path   = "/NFS/share/Euclid/Dataset/ObjectDetection/BDD100K/bdd100k/images/100k/val/"
 
     transform_train = transforms.Compose([ConvertCocoPolysToMask(),
-                                          transforms.ToTensor(),
-                                          resize(480,640)])
-                                          #transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+                                          transforms.ToTensor()])
+                                          #torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+                                          #resize(480,640)])
 
     # our dataset has background and the other 15 classes of the target objects (1+15)
     num_classes = 16
@@ -58,10 +58,8 @@ def main(training=False):
     if training:
         # define training and validation data loaders
         bdd100k_train    = CocoDetection(train_data_path, "./det_train_coco.json", transforms=transform_train)
-        bdd100k_val      = CocoDetection(val_data_path, "./det_val_coco.json", transforms=transform_train)
         #bdd100k_train    = CocoDetection("/home/hhwu/datasets/bdd100k/bdd100k/images/100k/train", "/home/hhwu/datasets/bdd100k/bdd100k/COCOFormat/classes_15/det_train_coco_gyr_dss.json", transforms=None)
-        train_dataloader = DataLoader(bdd100k_train, batch_size=4, shuffle=False, num_workers=0, collate_fn=collate_fn)
-        val_dataloader   = DataLoader(bdd100k_val, batch_size=1, shuffle=False, num_workers=0)
+        train_dataloader = DataLoader(bdd100k_train, batch_size=8, shuffle=False, num_workers=4, collate_fn=collate_fn)
 
 
         # get the model using our helper function
@@ -92,7 +90,12 @@ def main(training=False):
             # evaluate on the test dataset
             # evaluate(model, data_loader_test, device=device)
             torch.save(model, f"faster_rcnn_50_epoch_{epoch}.pt" )
-        
+    
+
+
+    bdd100k_val      = CocoDetection(val_data_path, "./det_val_coco.json", transforms=transform_train)
+    val_dataloader   = DataLoader(bdd100k_val, batch_size=1, shuffle=False, num_workers=0)
+
     model = torch.load("faster_rcnn_50_epoch_5.pt")
     # pick one image from the test set
     img, _ = bdd100k_val[0]
