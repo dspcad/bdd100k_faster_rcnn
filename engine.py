@@ -7,14 +7,14 @@ import torchvision.models.detection.mask_rcnn
 
 from coco_utils import get_coco_api_from_dataset
 from coco_eval import CocoEvaluator
-import utils
+import utils, copy
 
 
-def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq, local_rank):
+def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq):
     model.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
-    header = '{} Epoch: [{}]'.format(local_rank, epoch)
+    header = 'Epoch: [{}]'.format(epoch)
 
     lr_scheduler = None
     if epoch == 0:
@@ -29,7 +29,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq, lo
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
         #targets = [{k: v for k, v in t.items()} for t in targets]
 
-        # print(f"debug: img shape: {len(images)}   {images[0].shape}")
+        print(f"debug: img shape: {len(images)}   {images[0].shape}")
 
         #for t in targets:
         #    print(f"debug:      {t}")
@@ -94,32 +94,50 @@ def evaluate(model, data_loader, device):
 
     coco = get_coco_api_from_dataset(data_loader.dataset)
     iou_types = _get_iou_types(model)
-    coco_evaluator = CocoEvaluator(coco, iou_types)
 
-    for image, targets in metric_logger.log_every(data_loader, 100, header):
-        image = list(img.to(device) for img in image)
-        targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+    for i in range(6,16):
+        coco_evaluator = CocoEvaluator(coco, iou_types)
+        coco_evaluator.coco_eval["bbox"].params.catIds = [i]
 
-        torch.cuda.synchronize()
-        model_time = time.time()
-        outputs = model(image)
+        cnt = 0
+        for image, targets in metric_logger.log_every(data_loader, 100, header):
+            image = list(img.to(device) for img in image)
+            targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
-        outputs = [{k: v.to(cpu_device) for k, v in t.items()} for t in outputs]
-        model_time = time.time() - model_time
+            torch.cuda.synchronize()
+            model_time = time.time()
+            outputs = model(image)
 
-        res = {target["image_id"].item(): output for target, output in zip(targets, outputs)}
-        evaluator_time = time.time()
-        coco_evaluator.update(res)
-        evaluator_time = time.time() - evaluator_time
-        metric_logger.update(model_time=model_time, evaluator_time=evaluator_time)
+            outputs = [{k: v.to(cpu_device) for k, v in t.items()} for t in outputs]
+            model_time = time.time() - model_time
 
-    # gather the stats from all processes
-    metric_logger.synchronize_between_processes()
-    print("Averaged stats:", metric_logger)
-    coco_evaluator.synchronize_between_processes()
+            res = {target["image_id"].item(): output for target, output in zip(targets, outputs)}
+            evaluator_time = time.time()
+            coco_evaluator.update(res)
+            evaluator_time = time.time() - evaluator_time
+            metric_logger.update(model_time=model_time, evaluator_time=evaluator_time)
 
-    # accumulate predictions from all images
-    coco_evaluator.accumulate()
-    coco_evaluator.summarize()
-    torch.set_num_threads(n_threads)
+            if cnt == 10:
+                break
+            cnt +=1
+
+        # gather the stats from all processes
+        metric_logger.synchronize_between_processes()
+        print(f"Averaged stats {i}:", metric_logger)
+        coco_evaluator.synchronize_between_processes()
+
+        # accumulate predictions from all images
+        #cat_id2name = {1: 'pedestrian', 2: 'rider', 3: 'car', 4: 'truck', 5 : 'bus', 6 : 'motorcycle', 7 : 'bicycle', 8 : 'traffic light', 9 : 'traffic sign', 10 : 'green', 11 : 'yellow', 12 : 'red', 13 : 'do not enter', 14 : 'stop sign', 15 : 'speed limit'}
+        #for catId in coco_evaluator.coco_gt.getCatIds():
+        #    print(f"catId: {catId}")
+        #    print(f"catId: {cat_id2name[catId]} ({catId})")
+        #    cocoEval = copy.deepcopy(coco_evaluator)
+        #    cocoEval.coco_eval["bbox"].params.catIds = [catId]
+        #    cocoEval.evaluate()
+        #    cocoEval.accumulate()
+        #    cocoEval.summarize()
+    
+        coco_evaluator.accumulate()
+        coco_evaluator.summarize()
+        torch.set_num_threads(n_threads)
     return coco_evaluator
