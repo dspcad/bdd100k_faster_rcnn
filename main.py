@@ -15,7 +15,7 @@ from coco_utils import ConvertCocoPolysToMask
 from torch.utils.data import DataLoader
 from coco_utils import resize
 
-
+import utils
 
 def get_model_instance_detection(num_classes):
     # load an instance segmentation model pre-trained pre-trained on COCO
@@ -24,7 +24,7 @@ def get_model_instance_detection(num_classes):
     # get number of input features for the classifier
     in_features = model.roi_heads.box_predictor.cls_score.in_features
     # replace the pre-trained head with a new one
-    model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
+    # model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
 
     return model
 
@@ -44,12 +44,12 @@ def main(training=False):
     # device = torch.device('cpu')
 
 
-    train_data_path = "/NFS/share/Euclid/Dataset/ObjectDetection/BDD100K/bdd100k/images/100k/train/"
-    val_data_path   = "/NFS/share/Euclid/Dataset/ObjectDetection/BDD100K/bdd100k/images/100k/val/"
+    train_data_path = "/home/hhwu/datasets/bdd100k/bdd100k/images/100k/train/"
+    val_data_path   = "/home/hhwu/datasets/bdd100k/bdd100k/images/100k/val/"
 
     transform_train = transforms.Compose([ConvertCocoPolysToMask(),
-                                          transforms.ToTensor(),
-                                          resize(480,640)])
+                                          transforms.ToTensor()])
+                                          #resize(480,640)])
                                           #transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
 
     # our dataset has background and the other 15 classes of the target objects (1+15)
@@ -57,11 +57,9 @@ def main(training=False):
 
     if training:
         # define training and validation data loaders
-        bdd100k_train    = CocoDetection(train_data_path, "./det_train_coco.json", transforms=transform_train)
-        bdd100k_val      = CocoDetection(val_data_path, "./det_val_coco.json", transforms=transform_train)
+        bdd100k_train    = CocoDetection(train_data_path, "./det_train_coco_gyr_dss.json", transforms=transform_train)
         #bdd100k_train    = CocoDetection("/home/hhwu/datasets/bdd100k/bdd100k/images/100k/train", "/home/hhwu/datasets/bdd100k/bdd100k/COCOFormat/classes_15/det_train_coco_gyr_dss.json", transforms=None)
         train_dataloader = DataLoader(bdd100k_train, batch_size=4, shuffle=False, num_workers=0, collate_fn=collate_fn)
-        val_dataloader   = DataLoader(bdd100k_val, batch_size=1, shuffle=False, num_workers=0)
 
 
         # get the model using our helper function
@@ -93,24 +91,32 @@ def main(training=False):
             # evaluate(model, data_loader_test, device=device)
             torch.save(model, f"faster_rcnn_50_epoch_{epoch}.pt" )
         
-    model = torch.load("faster_rcnn_50_epoch_5.pt")
+    bdd100k_val      = CocoDetection(val_data_path, "./det_val_coco_gyr_dss.json", transforms=transform_train)
+    val_dataloader   = DataLoader(bdd100k_val, batch_size=8, shuffle=False, num_workers=0, collate_fn=collate_fn)
+
+
+    #val_dataloader = build_detection_test_loader(DatasetRegistry.get("BDD100K_val_dataset"))
+    model = torch.load("faster_rcnn_50_epoch_9.pt")
+    # model = get_model_instance_detection(81).to(device)
     # pick one image from the test set
-    img, _ = bdd100k_val[0]
-    print(img)
+    img, target = bdd100k_val[0]
+    print(target)
     # put the model in evaluation mode
     model.eval()
     with torch.no_grad():
+        evaluate(model, val_dataloader, device=device)
         prediction = model([img.to(device)])
 
         
-        print(prediction[0]['boxes'])
+        # print(prediction)
         img1 = Image.fromarray(img.mul(255).permute(1, 2, 0).byte().numpy())
         img1.save("target.png")
         
         img1 = torchvision.transforms.ToTensor()(img1)
         img1 = torchvision.transforms.ConvertImageDtype(dtype=torch.uint8) (img1)
         colors=["yellow" for i in prediction[0]['boxes']]
-        img1 = torchvision.utils.draw_bounding_boxes(img1, prediction[0]['boxes'], colors=colors ,width=3,fill=True)
+        #img1 = torchvision.utils.draw_bounding_boxes(img1, prediction[0]['boxes'], colors=colors ,width=2,fill=True)
+        img1 = torchvision.utils.draw_bounding_boxes(img1, target['boxes'], colors=colors ,width=2,fill=True)
         target = Image.fromarray(img1.permute(1,2,0).byte().numpy())
         target.save("target1.png")
 
@@ -123,6 +129,6 @@ def main(training=False):
 
 
 if __name__ == "__main__":
-    main(True)
+    main(False)
     #run(False)
     # run(True)
