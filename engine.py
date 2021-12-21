@@ -10,11 +10,11 @@ from coco_eval import CocoEvaluator
 import utils, copy
 
 
-def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq):
+def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq, local_rank):
     model.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
-    header = 'Epoch: [{}]'.format(epoch)
+    header = '[{}] Epoch: [{}]'.format(local_rank, epoch)
 
     lr_scheduler = None
     if epoch == 0:
@@ -29,7 +29,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq):
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
         #targets = [{k: v for k, v in t.items()} for t in targets]
 
-        print(f"debug: img shape: {len(images)}   {images[0].shape}")
+        #print(f"debug: img shape: {len(images)}   {images[0].shape}")
 
         #for t in targets:
         #    print(f"debug:      {t}")

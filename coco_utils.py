@@ -217,7 +217,6 @@ class resize(object):
 
         # PIL image has the size in (width, height)
         # print(f"img shape: {img.shape}")
-        # _, ww, hh = img.shape
 
         _, hh, ww = img.shape
 
