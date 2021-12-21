@@ -93,8 +93,11 @@ def main(training=False):
     # device = torch.device('cpu')
 
 
-    train_data_path = "/nfs/home/data/Euclid/Dataset/ObjectDetection/BDD100K/bdd100k/images/100k/train/"
-    val_data_path   = "/nfs/home/data/Euclid/Dataset/ObjectDetection/BDD100K/bdd100k/images/100k/val/"
+    # train_data_path = "/nfs/home/data/Euclid/Dataset/ObjectDetection/BDD100K/bdd100k/images/100k/train/"
+    # val_data_path   = "/nfs/home/data/Euclid/Dataset/ObjectDetection/BDD100K/bdd100k/images/100k/val/"
+
+    train_data_path = "/NFS/share/Euclid/Dataset/ObjectDetection/BDD100K/bdd100k/images/100k/train/"
+    val_data_path   = "/NFS/share/Euclid/Dataset/ObjectDetection/BDD100K/bdd100k/images/100k/val/"
 
     transform_train = transforms.Compose([ConvertCocoPolysToMask(),
                                           transforms.ToTensor(),
@@ -110,7 +113,7 @@ def main(training=False):
         bdd100k_train    = CocoDetection(train_data_path, "./det_train_coco_gyr_dss.json", transforms=transform_train)
         #bdd100k_train    = CocoDetection("/home/hhwu/datasets/bdd100k/bdd100k/images/100k/train", "/home/hhwu/datasets/bdd100k/bdd100k/COCOFormat/classes_15/det_train_coco_gyr_dss.json", transforms=None)
         bdd100k_train_sampler = DistributedSampler(dataset=bdd100k_train)
-        train_dataloader = DataLoader(bdd100k_train, batch_size=16, shuffle=False, sampler=bdd100k_train_sampler, num_workers=4, collate_fn=collate_fn)
+        train_dataloader = DataLoader(bdd100k_train, batch_size=4, shuffle=False, sampler=bdd100k_train_sampler, num_workers=0, collate_fn=collate_fn)
 
 
         # get the model using our helper function
@@ -124,7 +127,7 @@ def main(training=False):
 
         # construct an optimizer
         params = [p for p in ddp_model.parameters() if p.requires_grad]
-        optimizer = torch.optim.SGD(params, lr=0.0002,
+        optimizer = torch.optim.SGD(params, lr=0.001,
                                     momentum=0.9, weight_decay=0.0005)
         # and a learning rate scheduler
         lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
