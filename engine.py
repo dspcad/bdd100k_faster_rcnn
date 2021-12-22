@@ -95,49 +95,59 @@ def evaluate(model, data_loader, device):
     coco = get_coco_api_from_dataset(data_loader.dataset)
     iou_types = _get_iou_types(model)
 
-    for i in range(6,16):
+    evaluator_15c = []
+    coco_evaluator = CocoEvaluator(coco, iou_types)
+    coco_evaluator.coco_eval["bbox"].params.catIds = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
+    evaluator_15c.append(coco_evaluator)
+
+    for i in range(1,16):
         coco_evaluator = CocoEvaluator(coco, iou_types)
         coco_evaluator.coco_eval["bbox"].params.catIds = [i]
+        evaluator_15c.append(coco_evaluator)
 
-        cnt = 0
-        for image, targets in metric_logger.log_every(data_loader, 100, header):
-            image = list(img.to(device) for img in image)
-            targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
-            torch.cuda.synchronize()
-            model_time = time.time()
-            outputs = model(image)
+    for image, targets in metric_logger.log_every(data_loader, 100, header):
+        image = list(img.to(device) for img in image)
+        targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
-            outputs = [{k: v.to(cpu_device) for k, v in t.items()} for t in outputs]
-            model_time = time.time() - model_time
+        torch.cuda.synchronize()
+        model_time = time.time()
+        outputs = model(image)
 
-            res = {target["image_id"].item(): output for target, output in zip(targets, outputs)}
-            evaluator_time = time.time()
+        outputs = [{k: v.to(cpu_device) for k, v in t.items()} for t in outputs]
+        model_time = time.time() - model_time
+
+        res = {target["image_id"].item(): output for target, output in zip(targets, outputs)}
+        evaluator_time = time.time()
+
+        for coco_evaluator in evaluator_15c:
             coco_evaluator.update(res)
-            evaluator_time = time.time() - evaluator_time
-            metric_logger.update(model_time=model_time, evaluator_time=evaluator_time)
 
-            if cnt == 10:
-                break
-            cnt +=1
+        evaluator_time = time.time() - evaluator_time
+        metric_logger.update(model_time=model_time, evaluator_time=evaluator_time)
 
-        # gather the stats from all processes
-        metric_logger.synchronize_between_processes()
-        print(f"Averaged stats {i}:", metric_logger)
+
+    # gather the stats from all processes
+    metric_logger.synchronize_between_processes()
+    print(f"Averaged stats {i}:", metric_logger)
+    for coco_evaluator in evaluator_15c:
         coco_evaluator.synchronize_between_processes()
 
-        # accumulate predictions from all images
-        #cat_id2name = {1: 'pedestrian', 2: 'rider', 3: 'car', 4: 'truck', 5 : 'bus', 6 : 'motorcycle', 7 : 'bicycle', 8 : 'traffic light', 9 : 'traffic sign', 10 : 'green', 11 : 'yellow', 12 : 'red', 13 : 'do not enter', 14 : 'stop sign', 15 : 'speed limit'}
-        #for catId in coco_evaluator.coco_gt.getCatIds():
-        #    print(f"catId: {catId}")
-        #    print(f"catId: {cat_id2name[catId]} ({catId})")
-        #    cocoEval = copy.deepcopy(coco_evaluator)
-        #    cocoEval.coco_eval["bbox"].params.catIds = [catId]
-        #    cocoEval.evaluate()
-        #    cocoEval.accumulate()
-        #    cocoEval.summarize()
-    
+    # accumulate predictions from all images
+    #cat_id2name = {1: 'pedestrian', 2: 'rider', 3: 'car', 4: 'truck', 5 : 'bus', 6 : 'motorcycle', 7 : 'bicycle', 8 : 'traffic light', 9 : 'traffic sign', 10 : 'green', 11 : 'yellow', 12 : 'red', 13 : 'do not enter', 14 : 'stop sign', 15 : 'speed limit'}
+    #for catId in coco_evaluator.coco_gt.getCatIds():
+    #    print(f"catId: {catId}")
+    #    print(f"catId: {cat_id2name[catId]} ({catId})")
+    #    cocoEval = copy.deepcopy(coco_evaluator)
+    #    cocoEval.coco_eval["bbox"].params.catIds = [catId]
+    #    cocoEval.evaluate()
+    #    cocoEval.accumulate()
+    #    cocoEval.summarize()
+    cat_id2name = {0: '15 Classes', 1: 'pedestrian', 2: 'rider', 3: 'car', 4: 'truck', 5 : 'bus', 6 : 'motorcycle', 7 : 'bicycle', 8 : 'traffic light', 9 : 'traffic sign', 10 : 'green', 11 : 'yellow', 12 : 'red', 13 : 'do not enter', 14 : 'stop sign', 15 : 'speed limit'}
+    for i, coco_evaluator in enumerate(evaluator_15c):
+        print(f"Category: {cat_id2name[i]}")
         coco_evaluator.accumulate()
         coco_evaluator.summarize()
         torch.set_num_threads(n_threads)
-    return coco_evaluator
+    return evaluator_15c
+
