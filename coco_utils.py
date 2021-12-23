@@ -51,7 +51,6 @@ def convert_coco_poly_to_mask(segmentations, height, width):
 class ConvertCocoPolysToMask(object):
     def __call__(self, image, target):
         w, h = image.size
-
         image_id = target["image_id"]
         image_id = torch.tensor([image_id])
 
@@ -223,19 +222,54 @@ class resize(object):
         # print(f"target:  {target}")
         gt_bbox  = len(target['boxes'])
         if gt_bbox != 0:
+            scale_x = self.target_w/ww
+            scale_y = self.target_h/hh
+
+            #print(f"scale x: {scale_x}          scale y: {scale_y}")
             for i in range(0,gt_bbox):
-                scale_x = self.target_w/ww
-                scale_y = self.target_h/hh
-  
+                ##################################################
+                #           target['boxes'][i][0] : x1           #
+                #           target['boxes'][i][1] : y1           #
+                #           target['boxes'][i][2] : x2           #
+                #           target['boxes'][i][3] : y2           #
+                #                                                #
+                #           also update target['area'][i]        #
+                ##################################################
                 if int(target['boxes'][i][2]+0.5)!=0 and int(target['boxes'][i][3]+0.5)!=0:
+                    #print(f"  before:  {target['boxes'][i]}    area: {target['area'][i]}")
                     target['boxes'][i][0] = target['boxes'][i][0]*scale_x
                     target['boxes'][i][1] = target['boxes'][i][1]*scale_y
                     target['boxes'][i][2] = target['boxes'][i][2]*scale_x
                     target['boxes'][i][3] = target['boxes'][i][3]*scale_y
 
+                    target['area'][i] = target['area'][i]*scale_x*scale_y
+                    #print(f"  after:  {target['boxes'][i]}    area: {target['area'][i]}")
+
         img = T.functional.resize(img, (self.target_h, self.target_w))
+        #print(f"img shape: {img.shape}")
         return img, target
 
+class resizeVal(object):
+    def __init__(self, h=640, w=640):
+        self.target_h = h
+        self.target_w = w
+    def __call__(self, img, target):
+        #print(f"target h: {self.target_h}")
+        #print(f"target w: {self.target_w}")
+        #print(f"img size: {img.size}")
+
+        # PIL image has the size in (width, height)
+        # print(f"img shape: {img.shape}")
+
+        _, hh, ww = img.shape
+
+        scale_x = self.target_w/ww
+        scale_y = self.target_h/hh
+
+        
+        img = T.functional.resize(img, (self.target_h, self.target_w))
+        #print(f"img shape: {img.shape}")
+        return img, target
 
 
 class CocoDetection(torchvision.datasets.CocoDetection):

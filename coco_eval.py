@@ -265,8 +265,21 @@ def loadRes(self, resFile):
             ann['id'] = id + 1
     elif 'bbox' in anns[0] and not anns[0]['bbox'] == []:
         res.dataset['categories'] = copy.deepcopy(self.dataset['categories'])
+
+        #################################################################
+        # FIXME: Hard code for the mAP calclation issue caused by the   #
+        #        image resizing.                                        #
+        #################################################################
+        scale_x = 2
+        scale_y = 720/480
+            
         for id, ann in enumerate(anns):
             bb = ann['bbox']
+            bb[0] = bb[0]*scale_x
+            bb[1] = bb[1]*scale_y
+            bb[2] = bb[2]*scale_x
+            bb[3] = bb[3]*scale_y
+
             x1, x2, y1, y2 = [bb[0], bb[0] + bb[2], bb[1], bb[1] + bb[3]]
             if 'segmentation' not in ann:
                 ann['segmentation'] = [[x1, y1, x1, y2, x2, y2, x2, y1]]

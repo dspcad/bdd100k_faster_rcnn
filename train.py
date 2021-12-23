@@ -50,11 +50,11 @@ def collate_fn(batch):
     #return tuple(zip(*batch))
 
 
-def main(training=False):
-    num_epochs_default = 10000
-    batch_size_default = 256 # 1024
-    learning_rate_default = 0.1
-    random_seed_default = 0
+def run():
+    num_epochs_default = 300
+    batch_size_default = 32 # 1024
+    learning_rate_default = 0.001
+    random_seed_default = 42
     model_dir_default = "saved_models"
     model_filename_default = "faster_rcnn_distributed.pth"
 
@@ -95,106 +95,67 @@ def main(training=False):
 
 
     # train_data_path = "/nfs/home/data/Euclid/Dataset/ObjectDetection/BDD100K/bdd100k/images/100k/train/"
-    # val_data_path   = "/nfs/home/data/Euclid/Dataset/ObjectDetection/BDD100K/bdd100k/images/100k/val/"
-
     train_data_path = "/home/hhwu/datasets/bdd100k/bdd100k/images/100k/train/"
-    val_data_path   = "/home/hhwu/datasets/bdd100k/bdd100k/images/100k/val/"
 
     transform_train = transforms.Compose([ConvertCocoPolysToMask(),
                                           transforms.ToTensor(),
                                           resize(480,640)])
                                           #torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
                                           #resize(480,640)])
-
     transform_val   = transforms.Compose([ConvertCocoPolysToMask(),
                                           transforms.ToTensor(),
                                           resizeVal(480,640)])
+
+
     # our dataset has background and the other 15 classes of the target objects (1+15)
     num_classes = 16
 
-    if training:
-        # define training and validation data loaders
-        bdd100k_train    = CocoDetection(train_data_path, "./det_train_coco_gyr_dss.json", transforms=transform_train)
-        #bdd100k_train    = CocoDetection("/home/hhwu/datasets/bdd100k/bdd100k/images/100k/train", "/home/hhwu/datasets/bdd100k/bdd100k/COCOFormat/classes_15/det_train_coco_gyr_dss.json", transforms=None)
-        bdd100k_train_sampler = DistributedSampler(dataset=bdd100k_train)
-        train_dataloader = DataLoader(bdd100k_train, batch_size=4, shuffle=False, sampler=bdd100k_train_sampler, num_workers=0, collate_fn=collate_fn)
-
-
-        # get the model using our helper function
-        # model = torch.nn.DataParallel(get_model_instance_detection(num_classes)).to(device)
-        model = get_model_instance_detection(num_classes).to(device)
-        model = model.to(device)
-        ddp_model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank], output_device=local_rank)
-
-        # move model to the right device
-        # model.to(device)
-
-        # construct an optimizer
-        params = [p for p in ddp_model.parameters() if p.requires_grad]
-        optimizer = torch.optim.SGD(params, lr=0.001,
-                                    momentum=0.9, weight_decay=0.0005)
-        # and a learning rate scheduler
-        lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
-                                                       step_size=3,
-                                                       gamma=0.1)
-
-        # let's train it for 10 epochs
-        num_epochs = 100
-
-        for epoch in range(num_epochs):
-            # train for one epoch, printing every 10 iterations
-            train_one_epoch(ddp_model, optimizer, train_dataloader, device, epoch, print_freq=10, local_rank=local_rank)
-            # update the learning rate
-            lr_scheduler.step()
-            # evaluate on the test dataset
-            # evaluate(model, data_loader_test, device=device)
-            #torch.save(model, f"faster_rcnn_50_epoch_{epoch}.pt" )
-            if local_rank == 0 and epoch > 0 and epoch % 10==0:
-                model_filepath = os.path.join(model_dir, f"faster_rcnn_50_epoch_{epoch}.pt")
-                torch.save(model, model_filepath)
-    
-
+    # define training and validation data loaders
+    bdd100k_train         = CocoDetection(train_data_path, "./det_train_coco_gyr_dss.json", transforms=transform_train)
+    bdd100k_train_sampler = DistributedSampler(dataset=bdd100k_train)
+    train_dataloader      = DataLoader(bdd100k_train, batch_size=batch_size, shuffle=False, sampler=bdd100k_train_sampler, num_workers=0, collate_fn=collate_fn)
 
     bdd100k_val      = CocoDetection(val_data_path, "./det_val_coco_gyr_dss.json", transforms=transform_val)
     val_dataloader   = DataLoader(bdd100k_val, batch_size=8, shuffle=False, num_workers=8, collate_fn=collate_fn)
 
-    # model = torch.load("faster_rcnn_50_epoch_9.pt")
-    model = torch.load("saved_models/faster_rcnn_50_epoch_50.pt")
+    # get the model using our helper function
+    # model = torch.nn.DataParallel(get_model_instance_detection(num_classes)).to(device)
+    model = get_model_instance_detection(num_classes).to(device)
+    model = model.to(device)
     ddp_model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank], output_device=local_rank)
 
+    if resume == True:
+        map_location = {"cuda:0": "cuda:{}".format(local_rank)}
+        ddp_model.load_state_dict(torch.load(model_filepath, map_location=map_location))
 
-    if local_rank == 0:
-        # pick one image from the test set
-        img, _ = bdd100k_val[0]
-        # print(img)
-        # put the model in evaluation mode
-        ddp_model.eval()
-        with torch.no_grad():
-            device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+
+    # construct an optimizer
+    params = [p for p in ddp_model.parameters() if p.requires_grad]
+    optimizer = torch.optim.SGD(params, lr=learning_rate, momentum=0.9, weight_decay=0.0005)
+
+    # and a learning rate scheduler
+    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=100)
+
+
+    for epoch in range(1,num_epochs+1):
+        # train for one epoch, printing every 10 iterations
+        train_one_epoch(ddp_model, optimizer, train_dataloader, device, epoch, print_freq=10, local_rank=local_rank)
+        # update the learning rate
+        lr_scheduler.step()
+        # evaluate on the test dataset
+        # evaluate(model, data_loader_test, device=device)
+        #torch.save(model, f"faster_rcnn_50_epoch_{epoch}.pt" )
+        if local_rank == 0 and epoch % 10==0:
             evaluate(ddp_model, val_dataloader, device=device)
-            prediction = model([img.to(device)])
+            saved_model_filepath = os.path.join(model_dir, f"faster_rcnn_50_epoch_{epoch}.pt")
+            torch.save(ddp_model.state_dict(), saved_model_filepath)
     
-            
-            print(prediction[0]['boxes'])
-            img1 = Image.fromarray(img.mul(255).permute(1, 2, 0).byte().numpy())
-            img1.save("target.png")
-            
-            img1 = torchvision.transforms.ToTensor()(img1)
-            img1 = torchvision.transforms.ConvertImageDtype(dtype=torch.uint8) (img1)
-            colors=["yellow" for i in prediction[0]['boxes']]
-            img1 = torchvision.utils.draw_bounding_boxes(img1, prediction[0]['boxes'], colors=colors ,width=3,fill=True)
-            target = Image.fromarray(img1.permute(1,2,0).byte().numpy())
-            target.save("target1.png")
-    
-    
-            #img2 = Image.fromarray(prediction[0]['masks'][0, 0].mul(255).byte().cpu().numpy())
-            #img2.save("result.png")
+
+
             
     
-        print("That's it!")
+    print("Done training!")
 
 
 if __name__ == "__main__":
-    main(False)
-    #run(False)
-    # run(True)
+    run()
