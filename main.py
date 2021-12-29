@@ -159,7 +159,10 @@ def main(training=False):
     val_dataloader   = DataLoader(bdd100k_val, batch_size=8, shuffle=False, num_workers=8, collate_fn=collate_fn)
 
     # model = torch.load("faster_rcnn_50_epoch_9.pt")
-    model = torch.load("saved_models/faster_rcnn_50_epoch_50.pt")
+    model = torch.load("saved_models/faster_rcnn_50_epoch_40.pt")
+    #model = get_model_instance_detection(num_classes).to(device)
+    #model.load_state_dict(torch.load("saved_models/faster_rcnn_50_epoch_1.pt"))
+    model = model.to(device)
     ddp_model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank], output_device=local_rank)
 
 

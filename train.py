@@ -99,6 +99,7 @@ def run():
 
     transform_train = transforms.Compose([ConvertCocoPolysToMask(),
                                           transforms.ToTensor(),
+                                          transforms.RandomHorizontalFlip(0.5),
                                           resize(480,640)])
                                           #torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
                                           #resize(480,640)])
